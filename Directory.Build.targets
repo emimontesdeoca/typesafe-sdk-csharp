@@ -1,0 +1,25 @@
+<Project>
+  <Target Name="GenerateTypeSafeVersion" BeforeTargets="CoreCompile" Condition="'$(MSBuildProjectName)' == 'TypeSafe.Ai'">
+    <PropertyGroup>
+      <_TypeSafeVersionFile>$(IntermediateOutputPath)TypeSafeVersion.g.cs</_TypeSafeVersionFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <_TypeSafeVersionLine Include="namespace TypeSafe.Ai" />
+      <_TypeSafeVersionLine Include="{" />
+      <_TypeSafeVersionLine Include="    /// &lt;summary&gt;SDK version used in package metadata and request identity headers.&lt;/summary&gt;" />
+      <_TypeSafeVersionLine Include="    public static class TypeSafeVersion" />
+      <_TypeSafeVersionLine Include="    {" />
+      <_TypeSafeVersionLine Include="        /// &lt;summary&gt;Current SDK version.&lt;/summary&gt;" />
+      <_TypeSafeVersionLine Include="        public const string SdkVersion = &quot;$(TypeSafeSdkVersion)&quot;%3B" />
+      <_TypeSafeVersionLine Include="    }" />
+      <_TypeSafeVersionLine Include="}" />
+    </ItemGroup>
+    <WriteLinesToFile
+      File="$(_TypeSafeVersionFile)"
+      Overwrite="true"
+      Lines="@(_TypeSafeVersionLine)" />
+    <ItemGroup>
+      <Compile Include="$(_TypeSafeVersionFile)" AutoGen="true" Link="Generated\TypeSafeVersion.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

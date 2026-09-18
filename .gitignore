@@ -1,0 +1,14 @@
+# .NET build output
+**/bin/
+**/obj/
+.vs/
+TestResults/
+artifacts/
+coverage/
+*.nupkg
+*.snupkg
+
+# Local tooling and credentials
+.env
+*.user
+*.suo

@@ -1,0 +1,89 @@
+name: validate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Run the protected NuGet publish job after validation"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore solution
+        run: dotnet restore TypeSafe.Ai.sln
+      - name: Verify formatting
+        run: dotnet format TypeSafe.Ai.sln --verify-no-changes --no-restore
+      - name: Verify release tag and version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: ./eng/CheckVersion.ps1 -Tag $env:RELEASE_TAG
+      - name: Build solution
+        run: dotnet build TypeSafe.Ai.sln --configuration Release --no-restore
+      - name: Run unit tests and coverage
+        run: dotnet test tests/TypeSafe.Ai.Tests/TypeSafe.Ai.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" --settings coverlet.runsettings
+      - name: Verify coverage floor
+        shell: pwsh
+        run: ./eng/CheckCoverage.ps1
+      - name: Run opt-in-safe integration project
+        run: dotnet test tests/TypeSafe.Ai.IntegrationTests/TypeSafe.Ai.IntegrationTests.csproj --configuration Release --no-build
+      - name: Pack tested artifact
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet pack src/TypeSafe.Ai/TypeSafe.Ai.csproj --configuration Release --output artifacts/package --no-build
+      - name: Validate package contents
+        if: matrix.os == 'ubuntu-latest'
+        shell: pwsh
+        run: ./eng/CheckPackage.ps1
+      - name: Restore package-only consumer
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet restore tests/TypeSafe.Ai.PackageTests/TypeSafe.Ai.PackageTests.csproj --configfile tests/TypeSafe.Ai.PackageTests/NuGet.config
+      - name: Run package-only consumer
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet test tests/TypeSafe.Ai.PackageTests/TypeSafe.Ai.PackageTests.csproj --configuration Release --no-restore
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-latest'
+        with:
+          name: typesafe-ai-package
+          path: artifacts/package/TypeSafe.Ai.*
+
+  publish:
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish == true) || startsWith(github.ref, 'refs/tags/v') }}
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: nuget-publish
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: typesafe-ai-package
+          path: artifacts/package
+      - name: Push the exact validated package
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: dotnet nuget push artifacts/package/TypeSafe.Ai.0.6.0.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
