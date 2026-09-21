@@ -1,49 +1,37 @@
-﻿using System.Text.Json.Nodes;
-using TypeSafe.Ai;
+﻿using TypeSafe.Ai;
 
-if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(TypeSafeEnvironment.ApiKey)))
+if (TypeSafeEnvironment.Read(TypeSafeEnvironment.ApiKey) is null)
 {
-    Console.WriteLine($"Set {TypeSafeEnvironment.ApiKey} before running this sample.");
+    Console.WriteLine($"Configura {TypeSafeEnvironment.ApiKey} antes de ejecutar la demo.");
+    Console.WriteLine($"PowerShell: $env:{TypeSafeEnvironment.ApiKey} = \"tu-api-key\"");
     return;
 }
 
-using var client = new TypeSafeClient(new TypeSafeClientOptions
+Console.Write("Texto para analizar: ");
+string? state = Console.ReadLine();
+if (string.IsNullOrWhiteSpace(state))
 {
-    Timeout = TimeSpan.FromSeconds(10),
-    Retry = new RetryPolicy { MaxRetries = 2 },
-});
+    Console.WriteLine("Debes escribir un texto.");
+    return;
+}
+
+using var client = new TypeSafeClient();
 
 try
 {
-    IReadOnlyList<ModelCard> models = await client.Models.ListAsync();
-    Console.WriteLine($"Available models: {models.Count}");
-
-    var questions = new Dictionary<string, Question>
+    SystemOneResult result = await client.SystemOneAsync(new SystemOneRequest
     {
-        ["billing"] = Questions.Noul(
-            "Is this about billing?",
-            new NoulCriteria { True = "A payment issue", False = null }),
-        ["tone"] = Questions.Choice("What is the tone?", new Dictionary<string, EntryValue?>
+        State = state,
+        Questions = new Dictionary<string, Question>
         {
-            ["calm"] = null,
-            ["frustrated"] = "Urgent or unhappy wording",
-        }),
-        ["urgency"] = Questions.Score("How urgent is this?", new EntryValue?[]
-        {
-            "can wait", "this week", "today",
-        }),
-    };
-    var state = EntryValue.FromObject(new JsonObject
-    {
-        ["subject"] = "Charged twice",
-        ["messages"] = new JsonArray("Please help resolve this."),
+            ["isBilling"] = Questions.Noul("¿Es un problema de facturación?"),
+        },
     });
 
-    using WithResponse<SystemOneResult> response = await client.SystemOneAsync(
-        new SystemOneRequest { State = state, Questions = questions }).WithResponseAsync();
-    Console.WriteLine($"Model: {response.Data.Model}; request: {response.RequestId ?? "none"}");
+    NoulAnswer answer = (NoulAnswer)result.Answers["isBilling"];
+    Console.WriteLine($"Probabilidad de facturación: {answer.Noul:P1}");
 }
 catch (ApiException exception)
 {
-    Console.Error.WriteLine($"TypeSafe API error {exception.Status}: {exception.Message}");
+    Console.Error.WriteLine($"Error de TypeSafe API ({exception.Status}): {exception.Message}");
 }

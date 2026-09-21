@@ -13,6 +13,19 @@ The package targets .NET 10 only. Supply `TYPESAFE_API_KEY` through the host env
 `ApiKey` in `TypeSafeClientOptions`. The key is private client state, is ignored by options JSON
 serialization, and is never written to SDK logs.
 
+## Console demo
+
+The repository includes a small interactive console app. Set the key in the current PowerShell
+session and run it from the repository root:
+
+```powershell
+$env:TYPESAFE_API_KEY = "tu-api-key"
+dotnet run --project .\samples\TypeSafe.Ai.Demo\TypeSafe.Ai.Demo.csproj
+```
+
+The demo asks for a text, sends one `SystemOne` question, and prints the probability returned by
+the API. The key is not stored in the source code.
+
 ## Minimal usage
 
 ```csharp
